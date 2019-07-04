@@ -1,3 +1,4 @@
+
 # Pyrogram - Telegram MTProto API Client Library for Python
 # Copyright (C) 2017-2019 Dan Tès <https://github.com/delivrance>
 #
@@ -19,10 +20,11 @@
 import base64
 import json
 import logging
+import sqlite3
 from pathlib import Path
 from threading import Lock
 
-from .memory_storage import MemoryStorage, sqlite3
+from .memory_storage import MemoryStorage
 
 log = logging.getLogger(__name__)
 
@@ -39,15 +41,15 @@ class FileStorage(MemoryStorage):
         self.lock = Lock()
 
     # noinspection PyAttributeOutsideInit
-    async def migrate_from_json(self, session_json: dict):
-        await self.open()
+    def migrate_from_json(self, session_json: dict):
+        self.open()
 
-        await self.set_dc_id(session_json["dc_id"])
-        await self.set_test_mode(session_json["test_mode"])
-        await self.set_auth_key(base64.b64decode("".join(session_json["auth_key"])))
-        await self.set_user_id(session_json["user_id"])
-        await self.set_date(session_json.get("date", 0))
-        await self.set_is_bot(session_json.get("is_bot", False))
+        self.set_dc_id(session_json["dc_id"])
+        self.set_test_mode(session_json["test_mode"])
+        self.set_auth_key(base64.b64decode("".join(session_json["auth_key"])))
+        self.set_user_id(session_json["user_id"])
+        self.set_date(session_json.get("date", 0))
+        self.set_is_bot(session_json.get("is_bot", False))
 
         peers_by_id = session_json.get("peers_by_id", {})
         peers_by_phone = session_json.get("peers_by_phone", {})
@@ -68,9 +70,9 @@ class FileStorage(MemoryStorage):
             peers[v][4] = k
 
         # noinspection PyTypeChecker
-        await self.update_peers(peers.values())
+        self.update_peers(peers.values())
 
-    async def open(self):
+    def open(self):
         path = self.database
         file_exists = path.is_file()
 
@@ -87,7 +89,7 @@ class FileStorage(MemoryStorage):
 
                 log.warning('The old session file has been renamed to "{}.OLD"'.format(path.name))
 
-                await self.migrate_from_json(session_json)
+                self.migrate_from_json(session_json)
 
                 log.warning("Done! The session has been successfully converted from JSON to SQLite storage")
 
@@ -96,14 +98,14 @@ class FileStorage(MemoryStorage):
         if Path(path.name + ".OLD").is_file():
             log.warning('Old session file detected: "{}.OLD". You can remove this file now'.format(path.name))
 
-        self.conn = await sqlite3.connect(
+        self.conn = sqlite3.connect(
             str(path),
             timeout=1,
             check_same_thread=False
         )
 
         if not file_exists:
-            await self.create()
+            self.create()
 
-        async with self.conn:
-            await self.conn.execute("VACUUM")
+        with self.conn:
+            self.conn.execute("VACUUM")
